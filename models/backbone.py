@@ -60,20 +60,20 @@ class BackboneBase(nn.Module):
 
     def __init__(self, backbone: nn.Module, train_backbone: bool, num_channels: int, return_interm_layers: bool):
         super().__init__()
-        if 'resnet' in name:
-            for name, parameter in backbone.named_parameters():
-                if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
-                    parameter.requires_grad_(False)
-            if return_interm_layers:
-                return_layers = {"layer1": "0", "layer2": "1", "layer3": "2", "layer4": "3"}
-            else:
-                return_layers = {'layer4': "0"}
-            self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
-            self.num_channels = num_channels
-        if 'swin' in name:
-            self.body = backbone
-            self.num_channels = num_channels
-            self.return_interm_layers = return_interm_layers
+        # if 'resnet' in name:
+        #     for name, parameter in backbone.named_parameters():
+        #         if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
+        #             parameter.requires_grad_(False)
+        #     if return_interm_layers:
+        #         return_layers = {"layer1": "0", "layer2": "1", "layer3": "2", "layer4": "3"}
+        #     else:
+        #         return_layers = {'layer4': "0"}
+        #     self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
+        #     self.num_channels = num_channels
+        # if 'swin' in name:
+        self.body = backbone
+        self.num_channels = num_channels
+        self.return_interm_layers = return_interm_layers
 
     def forward(self, tensor_list: NestedTensor):
         xs = self.body(tensor_list.tensors)
