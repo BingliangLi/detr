@@ -93,6 +93,7 @@ class Backbone(BackboneBase):
                  return_interm_layers: bool,
                  dilation: bool):
         name = name
+        print(f'backbone: {name}')
         if 'resnet' in name:
             backbone = getattr(torchvision.models, name)(
                 replace_stride_with_dilation=[False, False, dilation],
