@@ -246,4 +246,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    torch.set_float32_matmul_precision('high')
     main(args)
