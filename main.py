@@ -99,6 +99,9 @@ def get_args_parser():
     parser.add_argument('--world_size', default=1, type=int,
                         help='number of distributed processes')
     parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
+    
+    # model compiler
+    parser.add_argument('--compile', action='store_true', help='compile model')
     return parser
 
 
@@ -126,7 +129,8 @@ def main(args):
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
         model_without_ddp = model.module
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    model = torch.compile(model)
+    if args.compile:
+        model = torch.compile(model)
     print('number of params:', n_parameters)
 
     param_dicts = [
