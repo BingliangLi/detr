@@ -15,6 +15,7 @@ import util.misc as utils
 from datasets import build_dataset, get_coco_api_from_dataset
 from engine import evaluate, train_one_epoch
 from models import build_model
+import torch._dynamo
 
 
 def get_args_parser():
@@ -251,4 +252,5 @@ if __name__ == '__main__':
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     torch.set_float32_matmul_precision('high')
+    torch._dynamo.config.suppress_errors = True
     main(args)
