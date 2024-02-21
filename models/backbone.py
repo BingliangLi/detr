@@ -78,9 +78,12 @@ class BackboneBase(nn.Module):
     def forward(self, tensor_list: NestedTensor):
         xs = self.body(tensor_list.tensors)
         out: Dict[str, NestedTensor] = {}
-        breakpoint()
+        # breakpoint()
         for name, x in xs.items():
-            breakpoint()
+            # breakpoint()
+            # if the type of x is tuple, set x = x[0]
+            if isinstance(x, tuple):
+                x = x[0]
             m = tensor_list.mask
             assert m is not None
             mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
