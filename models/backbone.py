@@ -108,7 +108,7 @@ class Backbone(BackboneBase):
         if 'swinl' in name:
             name = 'microsoft/swin-large-patch4-window12-384'
             backbone = AutoBackbone.from_pretrained(name)
-            num_channels = 2048
+            num_channels = 1536
             super().__init__(backbone, train_backbone, num_channels, return_interm_layers)
 
 
