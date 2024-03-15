@@ -17,6 +17,8 @@ from .position_encoding import build_position_encoding
 
 from transformers import AutoBackbone
 
+from .swin_transformer import build_swin_transformer
+
 class FrozenBatchNorm2d(torch.nn.Module):
     """
     BatchNorm2d where the batch statistics and the affine parameters are fixed.
@@ -86,8 +88,8 @@ class BackboneBase(nn.Module):
             #     x = x[0]
             m = tensor_list.mask
             assert m is not None
-            mask = F.interpolate(m[None].float(), size=x[0].shape[-2:]).to(torch.bool)[0]
-            out[name] = NestedTensor(x[0], mask)
+            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
+            out[name] = NestedTensor(x, mask)
         return out
 
 
@@ -128,11 +130,91 @@ class Joiner(nn.Sequential):
         return out, pos
 
 
+# def build_backbone(args):
+#     position_embedding = build_position_encoding(args)
+#     train_backbone = args.lr_backbone > 0
+#     return_interm_layers = args.masks
+#     backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
+#     model = Joiner(backbone, position_embedding)
+#     model.num_channels = backbone.num_channels
+#     return model
+
 def build_backbone(args):
+    """
+    Useful args:
+        - backbone: backbone name
+        - lr_backbone: 
+        - dilation
+        - return_interm_indices: available: [0,1,2,3], [1,2,3], [3]
+        - backbone_freeze_keywords: 
+        - use_checkpoint: for swin only for now
+
+    """
+    # TODO fixed args
+    args.return_interm_indices = [2,3,4]
+    args.backbone_freeze_keywords = None
+    # TODO fixed args 
     position_embedding = build_position_encoding(args)
     train_backbone = args.lr_backbone > 0
-    return_interm_layers = args.masks
-    backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
+    if not train_backbone:
+        raise ValueError("Please set lr_backbone > 0")
+    
+    return_interm_indices = args.return_interm_indices
+    # assert return_interm_indices in [[0,1,2,3], [1,2,3], [3]]
+    backbone_freeze_keywords = args.backbone_freeze_keywords
+    use_checkpoint = getattr(args, 'use_checkpoint', False)
+
+    if args.backbone in ['resnet50', 'resnet101']:
+        backbone = Backbone(args.backbone, train_backbone, args.dilation,   
+                                return_interm_indices,   
+                                batch_norm=FrozenBatchNorm2d)
+        bb_num_channels = backbone.num_channels
+    elif args.backbone in ['swin_T_224_1k', 'swin_B_224_22k', 'swin_B_384_22k', 'swin_L_224_22k', 'swin_L_384_22k']:
+        pretrain_img_size = int(args.backbone.split('_')[-2])
+        backbone = build_swin_transformer(args.backbone, \
+                    pretrain_img_size=pretrain_img_size, \
+                    out_indices=tuple(return_interm_indices), \
+                dilation=args.dilation, use_checkpoint=use_checkpoint)
+        # backbone = AutoBackbone.from_pretrained('./params/swin-large-patch4-window12-384')
+        # freeze some layers
+        if backbone_freeze_keywords is not None:
+            for name, parameter in backbone.named_parameters():
+                for keyword in backbone_freeze_keywords:
+                    if keyword in name:
+                        parameter.requires_grad_(False)
+                        break
+        if "backbone_dir" in args:
+            pretrained_dir = args.backbone_dir
+            PTDICT = {
+                'swin_T_224_1k': 'swin_tiny_patch4_window7_224.pth',
+                'swin_B_384_22k': 'swin_base_patch4_window12_384.pth',
+                'swin_L_384_22k': 'swin_large_patch4_window12_384_22k.pth',
+            }
+            pretrainedpath = os.path.join(pretrained_dir, PTDICT[args.backbone])
+            checkpoint = torch.load(pretrainedpath, map_location='cpu')['model']
+            from collections import OrderedDict
+            def key_select_function(keyname):
+                if 'head' in keyname:
+                    return False
+                if args.dilation and 'layers.3' in keyname:
+                    return False
+                return True
+            _tmp_st = OrderedDict({k:v for k, v in clean_state_dict(checkpoint).items() if key_select_function(k)})
+            _tmp_st_output = backbone.load_state_dict(_tmp_st, strict=False)
+            print(str(_tmp_st_output))
+        # breakpoint()
+        bb_num_channels = backbone.num_features[4 - len(return_interm_indices):]
+        # breakpoint()
+        # bb_num_channels = [1536]
+    else:
+        raise NotImplementedError("Unknown backbone {}".format(args.backbone))
+    
+
+    assert len(bb_num_channels) == len(return_interm_indices), f"len(bb_num_channels) {len(bb_num_channels)} != len(return_interm_indices) {len(return_interm_indices)}"
+
+
     model = Joiner(backbone, position_embedding)
-    model.num_channels = backbone.num_channels
+    model.num_channels = bb_num_channels 
+    # breakpoint()
+    assert isinstance(bb_num_channels, List), "bb_num_channels is expected to be a List but {}".format(type(bb_num_channels))
     return model
